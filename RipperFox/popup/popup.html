@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>yt-dlp Control</title>
+  <style>
+    :root { --bg:#111; --panel:#181818; --surface:#1a1a1a; --border:#2c2c2c; --text:#e8e8e8; --muted:#aaa; --ok:#4caf50; --warn:#ffb300; --err:#f44336; }
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:13px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu}
+    body{width:360px;overflow-x:hidden}
+    .tabs{display:flex;background:var(--panel);border-bottom:1px solid var(--border)}
+    .tabs button{flex:1;padding:8px;border:0;background:transparent;color:#cfcfcf;cursor:pointer}
+    .tabs button.active{background:#232323;font-weight:700;color:#fff}
+    .tab{display:none;padding:10px 8px}
+    .tab.active{display:block}
+    h3{margin:8px 0 6px;border-bottom:1px solid var(--border);padding-bottom:3px}
+    input,textarea,button{width:100%;box-sizing:border-box;background:#202020;border:1px solid var(--border);color:#eaeaea;border-radius:6px;padding:6px;margin:4px 0}
+    textarea{min-height:58px;resize:vertical}
+    button{background:#2b2b2b;font-weight:700;cursor:pointer}
+    button:hover{background:#3a3a3a}
+    .list{max-height:460px;overflow:auto;padding-right:6px;scrollbar-width:thin;scrollbar-color:#2c2c2c #111}
+    .job{background:var(--surface);border:1px solid var(--border);border-left:3px solid #555;border-radius:8px;padding:6px;margin-bottom:8px}
+    .job.ok{border-left-color:var(--ok)}
+    .job.run{border-left-color:var(--warn)}
+    .job.err{border-left-color:var(--err)}
+    .muted{color:var(--muted)}
+    .site{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:8px}
+    .field-label{font-size:11px;color:#a9a9a9;margin-top:6px}
+    .row{display:flex;gap:8px}
+    .row .grow{flex:1}
+    #clearDownloads{background:#7b1e1e;border:none}
+    #clearDownloads:hover{background:#9c2525}
+    #toast{position:fixed;top:10px;right:10px;background:#1c1c1c;border-left:3px solid var(--ok);padding:8px 12px;border-radius:8px;opacity:0;transform:translateY(-8px);transition:.25s;pointer-events:none}
+    #toast.show{opacity:1;transform:translateY(0)}
+    .errorBox{background:#1b1111;border:1px solid #5a1f1f;color:#ffbcbc;border-radius:8px;padding:8px;margin:6px 0}
+  </style>
+</head>
+<body>
+  <div class="tabs">
+    <button id="tab-downloads" class="active">Downloads</button>
+    <button id="tab-settings">Settings</button>
+  </div>
+
+  <!-- Downloads tab -->
+  <div id="downloads" class="tab active">
+    <div id="jobsWrap" class="list">
+      <div id="jobsState" class="muted">Loading…</div>
+      <div id="jobList"></div>
+    </div>
+    <button id="clearDownloads">Clear Downloads</button>
+  </div>
+
+  <!-- Settings tab -->
+  <div id="settings" class="tab">
+    <div class="list">
+      <h3>yt-dlp Settings</h3>
+      <div id="settingsError" class="errorBox" style="display:none"></div>
+
+      <div class="field-label">yt-dlp path</div>
+      <input id="genPath" placeholder="yt-dlp" />
+
+      <div class="field-label">Default output directory</div>
+      <input id="genOutput" placeholder="C:/users/" />
+
+      <div class="field-label">Default yt-dlp args</div>
+      <textarea id="genArgs" placeholder="--recode-video mp4 --cookies-from-browser firefox"></textarea>
+
+      <div class="field-label">Toast notifications</div>
+      <label><input type="checkbox" id="showToasts" /> Show toasts</label>
+
+      <button id="saveGeneral">Save General Settings</button>
+
+      <h3>Add / Edit Site</h3>
+      <input id="sitePattern" placeholder="e.g. *youtube.com*, *youtu.be*" />
+      <input id="siteDir" placeholder="Download directory" />
+      <textarea id="siteArgs" placeholder="Extra yt-dlp args (--cookies-from-browser firefox --recode-video mp4)"></textarea>
+      <button id="saveSite">Save Site</button>
+
+      <h3>Configured Sites</h3>
+      <div id="sites"></div>
+    </div>
+  </div>
+
+  <div id="toast">Saved</div>
+  <script src="popup.js"></script>
+</body>
+</html>
