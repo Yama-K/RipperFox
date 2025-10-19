@@ -5,6 +5,19 @@
 
 ---
 
+⚠️ Important
+
+RipperFox consists of two parts:
+
+The Firefox extension, which adds right-click download options.
+
+The local backend, which must be downloaded and running on your machine for the extension to work.
+
+The extension cannot function without the backend.
+You can get the latest backend release and setup instructions right here in this repository.
+
+---
+
 ## ✨ Features
 
 - Right-click → **“RipperFox Download”** on almost any link, image, or video.
