@@ -15,7 +15,7 @@
 
 ---
 
-## ⚙️ Installation (Manual, Permanent, Requires ESR, DEV or Nightly builds)
+### ⚙️ Installation (Manual, Permanent, Requires ESR, DEV or Nightly builds)
 
 ### 1. Start the backend
 Run: ```run_backend.bat``` 
