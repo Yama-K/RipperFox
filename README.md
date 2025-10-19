@@ -91,6 +91,16 @@ To update it later, rebuild the .xpi and drag it onto about:addons.
 
 ---
 
+### Uninstall
+
+### 1. Stop the backend
+
+### 2. Uninstall the add-on the same way you uninstall any other extension. 
+
+### 3. It's gone. 
+
+---
+
 ### 🧠 Usage
 
 Make sure the backend is running. It will complain in Settings tab otherwise. 
