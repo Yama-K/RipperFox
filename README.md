@@ -15,6 +15,23 @@
 
 ---
 
+### ⚙️ Installation (Manual, temporary)
+
+### 1. Start the backend
+Run: ```run_backend.bat``` 
+Leave that window open — it launches the local Flask server on port 5100.
+
+### 2. Install as temporary add-on
+Go to: ```about:debugging#/runtime/this-firefox``` and choose ```This Firefox```
+
+<img width="226" height="127" alt="image" src="https://github.com/user-attachments/assets/cfff9939-256d-41ff-b1ee-27ec4bcc7f99" />
+
+Click ```Load Temporary Add-On``` and navigate to ```RipperFox\RipperFox\``` and select ```manifest.json```
+
+Done. Make sure your ```!run_backend.bat``` is running. 
+
+---
+
 ### ⚙️ Installation (Manual, Permanent, Requires ESR, DEV or Nightly builds)
 
 ### 1. Start the backend
