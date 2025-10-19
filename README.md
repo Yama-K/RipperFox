@@ -28,7 +28,23 @@ You can get the latest backend release and setup instructions right here in this
 
 ---
 
-### ⚙️ Installation (Manual, temporary)
+### ⚙️ Installation (Automatic, permanent, signed)
+
+### 1. Left click on RipperFox-1.0.xpi and install it
+
+### 2. Download [RipperFox-Backend.zip](https://github.com/Yama-K/RipperFox/releases/download/Stable-signed/RipperFox-backend.zip)
+
+  Unpack it somewhere, preferably into "RipperFox" folder or something similar. 
+
+### 3. Run ```!run_backend.bat```
+
+  This will install python and dependencies, download ffmpeg and yt-dlp. 
+
+### 4. Once done, don't kill the install terminal, that's your backend. 
+
+---
+
+### ⚙️ Installation (Manual, temporary, for unsigned)
 
 ### 1. Start the backend
 Run: ```run_backend.bat``` 
@@ -45,7 +61,7 @@ Done. Make sure your ```!run_backend.bat``` is running.
 
 ---
 
-### ⚙️ Installation (Manual, Permanent, Requires ESR, DEV or Nightly builds)
+### ⚙️ Installation (Manual, Permanent, Requires ESR, DEV or Nightly builds, for unsigned)
 
 ### 1. Start the backend
 Run: ```run_backend.bat``` 
