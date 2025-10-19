@@ -1,0 +1,16 @@
+{
+  "yt_dlp_path": "yt-dlp/yt-dlp.exe",
+  "default_dir": "downloads",
+  "default_args": "--cookies-from-browser firefox --recode-video mp4 --embed-thumbnail --embed-metadata",
+  "download_dirs": {
+    "*twitter.com*, *x.com*": {
+      "args": "--write-info-json --embed-thumbnail",
+      "dir": "downloads/twitter"
+    },
+    "*youtube*, *youtu.be*": {
+      "args": "--embed-thumbnail --embed-metadata",
+      "dir": "downloads/youtube"
+    }
+  },
+  "show_toasts": true
+}
