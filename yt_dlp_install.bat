@@ -17,7 +17,7 @@ if not exist "%YTDLP_DIR%" mkdir "%YTDLP_DIR%"
 
 REM Skip if already there
 if exist "%YTDLP_EXE%" (
-    echo [✓] yt-dlp.exe already exists at "%YTDLP_EXE%"
+    echo [OK] yt-dlp.exe already exists at "%YTDLP_EXE%"
     echo Skipping download.
     pause
     exit /b
@@ -25,19 +25,19 @@ if exist "%YTDLP_EXE%" (
 
 echo [*] Downloading yt-dlp.exe from official GitHub release...
 powershell -Command ^
-    "& {Invoke-WebRequest -Uri '%YTDLP_URL%' -OutFile '%YTDLP_EXE%' -UseBasicParsing}" || (
+    "Invoke-WebRequest -Uri '%YTDLP_URL%' -OutFile '%YTDLP_EXE%'"
+ 
+    if errorlevel 1 (
     echo [!] Download failed.
-    pause
     exit /b
 )
 
 if exist "%YTDLP_EXE%" (
     echo.
-    echo [✓] yt-dlp installed successfully.
+    echo [OK] yt-dlp installed successfully.
     echo Location: "%YTDLP_EXE%"
 ) else (
-    echo [!] yt-dlp.exe was not downloaded correctly.
+    echo [ERROR] yt-dlp.exe was not downloaded correctly.
 )
 
 echo.
-pause
