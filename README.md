@@ -32,8 +32,7 @@ You can get the latest backend release and setup instructions right here in this
 
 ### 1. Install [RipperFox Firefox Add-on](https://github.com/Yama-K/RipperFox/releases/download/Stable-1.1/RipperFox-1.0.xpi) (Just left click it, it should just install.)
 
-### 2. Download [RipperFox-Backend.zip](https://github.com/Yama-K/RipperFox/releases/download/Stable-1.1/RipperFox-1.1.zip)
-
+### 2. Clone this repo: ```git clone https://github.com/Yama-K/RipperFox```
   Unpack it and run !run_backend.bat 
 
 ### 3. Once done, don't kill the install terminal, that's your backend. 
