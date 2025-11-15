@@ -2,6 +2,9 @@
 setlocal
 title RipperFox Backend
 
+eho "Installing python via winget"
+winget install Python.Python.3.13
+
 set BASEDIR=%~dp0
 set PYTHON_EXE=%BASEDIR%python\python.exe
 set PYTHON_INSTALL=%BASEDIR%python_install.bat
