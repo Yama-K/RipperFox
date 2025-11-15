@@ -28,66 +28,15 @@ You can get the latest backend release and setup instructions right here in this
 
 ---
 
-### ⚙️ Installation (Automatic, permanent, signed)
+### ⚙️ Installation
 
-### 1. Left click on RipperFox-1.0.xpi and install it
+### 1. Install [RipperFox Firefox Add-on](https://github.com/Yama-K/RipperFox/releases/download/Stable-1.1/RipperFox-1.0.xpi) (Just left click it, it should just install.)
 
-### 2. Download [RipperFox-Backend.zip](https://github.com/Yama-K/RipperFox/releases/download/Stable-signed/RipperFox-backend.zip)
+### 2. Download [RipperFox-Backend.zip](https://github.com/Yama-K/RipperFox/releases/download/Stable-1.1/RipperFox-1.1.zip)
 
-  Unpack it somewhere, preferably into "RipperFox" folder or something similar. 
+  Unpack it and run !run_backend.bat 
 
-### 3. Run ```!run_backend.bat```
-
-  This will install python and dependencies, download ffmpeg and yt-dlp. 
-
-### 4. Once done, don't kill the install terminal, that's your backend. 
-
----
-
-### ⚙️ Installation (Manual, temporary, for unsigned)
-
-### 1. Start the backend
-Run: ```run_backend.bat``` 
-Leave that window open — it launches the local Flask server on port 5100.
-
-### 2. Install as temporary add-on
-Go to: ```about:debugging#/runtime/this-firefox``` and choose ```This Firefox```
-
-<img width="226" height="127" alt="image" src="https://github.com/user-attachments/assets/cfff9939-256d-41ff-b1ee-27ec4bcc7f99" />
-
-Click ```Load Temporary Add-On``` and navigate to ```RipperFox\RipperFox\``` and select ```manifest.json```
-
-Done. Make sure your ```!run_backend.bat``` is running. 
-
----
-
-### ⚙️ Installation (Manual, Permanent, Requires ESR, DEV or Nightly builds, for unsigned)
-
-### 1. Start the backend
-Run: ```run_backend.bat``` 
-Leave that window open — it launches the local Flask server on port 5100.
-
-### 2. Package the extension
-
-Open the RipperFox/ RipperFox folder
-
-Select all files inside (manifest.json, popup/, background.js, etc.).
-
-Compress them into a ZIP file.
-
-Rename it to: ```RipperFox.xpi```
-
-### 3. Enable unsigned installs
-
-In Firefox Developer Edition or Nightly, open about:config and set:
-```xpinstall.signatures.required → false```
-
-### 4. Install
-
-Go to about:addons → Install Add-on From File… → choose RipperFox.xpi.
-
-The add-on will stay installed after restart.
-To update it later, rebuild the .xpi and drag it onto about:addons.
+### 3. Once done, don't kill the install terminal, that's your backend. 
 
 ---
 
