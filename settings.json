@@ -1,5 +1,4 @@
 {
-  "yt_dlp_path": "yt-dlp/yt-dlp.exe",
   "default_dir": "downloads",
   "default_args": "--recode-video mp4 --embed-thumbnail --embed-metadata",
   "download_dirs": {

@@ -1,3 +1,8 @@
 flask
 flask-cors
 colorama
+yt-dlp
+python-ffmpeg
+pystray
+Pillow
+appdirs
