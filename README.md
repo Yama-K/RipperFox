@@ -35,8 +35,6 @@ You can get the latest backend release and setup instructions right here in this
 ### 2. Download the exe: [RipperFox.exe](https://github.com/Yama-K/RipperFox/releases/download/Release/RipperFox.exe)
   and run it, it'll automatically hide it in your system tray. 
 
-### 3. Once done, don't kill the install terminal, that's your backend. 
-
 ---
 
 ### Uninstall
@@ -73,21 +71,6 @@ yt-dlp arguments
 Per-site folders and args (*youtube.com*, *youtu.be*, etc.)
 
 All settings persist in backend/settings.json.
-
----
-
-
-### 🚀 Updating yt-dlp
-
-Open terminal → drag & drop ```yt-dlp.exe``` to it, add update option ```-U```, press enter, done.
-
-Like so: ```C:\Path\To\yt-dlp\yt-dlp.exe -U``` will get you 
-
-```
-C:\Path\To\yt-dlp\yt-dlp.exe -U
-Latest version: stable@2025.10.14 from yt-dlp/yt-dlp
-yt-dlp is up to date (stable@2025.10.14 from yt-dlp/yt-dlp)
-```
 
 ---
 
