@@ -10,7 +10,34 @@ echo.
 echo [*] Installing required packages...
 pip install pyinstaller pillow pystray appdirs
 
-echo [*] Building executable with explicit includes...
+echo [*] Downloading FFmpeg binaries...
+if not exist "ffmpeg.exe" (
+    echo Downloading ffmpeg.exe...
+    powershell -Command "Invoke-WebRequest -Uri 'https://github.com/Yama-K/FFmpeg/releases/download/Release/ffmpeg.exe' -OutFile 'ffmpeg.exe'"
+) else (
+    echo ffmpeg.exe already exists, skipping download.
+)
+
+if not exist "ffprobe.exe" (
+    echo Downloading ffprobe.exe...
+    powershell -Command "Invoke-WebRequest -Uri 'https://github.com/Yama-K/FFmpeg/releases/download/Release/ffprobe.exe' -OutFile 'ffprobe.exe'"
+) else (
+    echo ffprobe.exe already exists, skipping download.
+)
+
+echo [*] Verifying downloads...
+if not exist "ffmpeg.exe" (
+    echo [!] Failed to download ffmpeg.exe
+    pause
+    exit /b 1
+)
+if not exist "ffprobe.exe" (
+    echo [!] Failed to download ffprobe.exe
+    pause
+    exit /b 1
+)
+
+echo [*] Building executable...
 pyinstaller --onefile ^
             --console ^
             --icon=icon.ico ^
@@ -18,6 +45,8 @@ pyinstaller --onefile ^
             --add-data "icon.ico;." ^
             --add-data "settings.json;." ^
             --add-data "yt_backend.py;." ^
+            --add-data "ffmpeg.exe;." ^
+            --add-data "ffprobe.exe;." ^
             --hidden-import=flask ^
             --hidden-import=flask_cors ^
             --hidden-import=colorama ^

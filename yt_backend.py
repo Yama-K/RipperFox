@@ -4,6 +4,12 @@ local_site = os.path.join(os.path.dirname(__file__), "python", "Lib", "site-pack
 if os.path.isdir(local_site) and local_site not in sys.path:
     sys.path.insert(0, local_site)
 
+# --- Add FFmpeg to PATH for bundled executable ---
+if getattr(sys, 'frozen', False):
+    # Running as compiled exe
+    base_dir = sys._MEIPASS
+    os.environ['PATH'] = base_dir + os.pathsep + os.environ['PATH']
+
 # --- Check dependencies ---
 required = ["flask", "flask_cors", "colorama", "yt_dlp", "ffmpeg"]
 missing = []

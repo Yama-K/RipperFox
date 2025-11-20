@@ -5,7 +5,7 @@ a = Analysis(
     ['ripperfox_launcher.py'],
     pathex=[],
     binaries=[],
-    datas=[('icon.ico', '.'), ('settings.json', '.'), ('yt_backend.py', '.')],
+    datas=[('icon.ico', '.'), ('settings.json', '.'), ('yt_backend.py', '.'), ('ffmpeg.exe', '.'), ('ffprobe.exe', '.')],
     hiddenimports=['flask', 'flask_cors', 'colorama', 'yt_dlp', 'ffmpeg', 'pystray', 'PIL', 'PIL._imaging', 'PIL._imagingft', 'yt_dlp.extractor', 'yt_dlp.postprocessor', 'appdirs'],
     hookspath=[],
     hooksconfig={},
