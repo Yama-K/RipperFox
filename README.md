@@ -30,7 +30,6 @@ You can get the latest backend release and setup instructions right here in this
 
 ### ⚙️ Installation
 
-### 1. Install [RipperFox Firefox Add-on](https://github.com/Yama-K/RipperFoxExtension/releases/download/Release/RipperFox.xpi) (Just left click it, it should just install.) [(source)](https://github.com/Yama-K/RipperFoxExtension/releases/tag/Release)
 =======
 ### 1. Install the [RipperFox Extension by clicking me](https://github.com/Yama-K/RipperFoxExtension/releases/download/Release/RipperFoxExtension.xpi)
 
