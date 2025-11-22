@@ -31,7 +31,7 @@ You can get the latest backend release and setup instructions right here in this
 ### ⚙️ Installation
 
 =======
-### 1. Install the [RipperFox Extension by clicking me](https://github.com/Yama-K/RipperFoxExtension/releases/download/Release/RipperFoxExtension.xpi)
+### 1. Install the [RipperFox Extension by clicking me](https://github.com/Yama-K/RipperFoxExtension/releases/download/Release/RipperFox-2.1.xpi)
 
 ### 2. Download the exe: [RipperFox.exe](https://github.com/Yama-K/RipperFox/releases/download/Release/RipperFox.exe)
   and run it, it'll automatically hide it in your system tray. 
