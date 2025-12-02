@@ -4,6 +4,14 @@ local_site = os.path.join(os.path.dirname(__file__), "python", "Lib", "site-pack
 if os.path.isdir(local_site) and local_site not in sys.path:
     sys.path.insert(0, local_site)
 
+# --- yt-dlp_updater support ---
+try:
+    from ytdlp_updater import run_ytdlp_with_binary, ensure_ytdlp_binary, auto_update_check
+    YTDLP_UPDATER_AVAILABLE = True
+except ImportError:
+    YTDLP_UPDATER_AVAILABLE = False
+    print("[WARNING] ytdlp_updater not available, using Python package")
+
 # --- Add FFmpeg to PATH for bundled executable ---
 if getattr(sys, 'frozen', False):
     # Running as compiled exe
@@ -240,7 +248,24 @@ def download():
             
             log("yt-dlp", f"Downloading {url} to {download_dir}", Fore.GREEN)
             log("yt-dlp", f"Using options: {ydl_opts}", Fore.GREEN)
-            
+
+            # Try to use external binary first if available
+            if YTDLP_UPDATER_AVAILABLE:
+                log("yt-dlp", f"Using external yt-dlp binary for {url}", Fore.GREEN)
+                try:
+                    returncode, stdout, stderr = run_ytdlp_with_binary(url, download_dir, custom_args)
+                    if returncode == 0:
+                        JOBS[job_id]["status"] = "completed"
+                        log("yt-dlp", f"Job completed using binary: {url}", Fore.CYAN)
+                        return
+                    else:
+                        # Fallback to python package
+                        JOBS[job_id]["status"] = f"error: {stderr}"
+                        log("error", f"Binary download failed: {stderr}", Fore.RED)
+                except Exception as be:
+                    log("error", f"Binary run failed: {be}", Fore.RED)
+
+            # Fallback to Python package if binary failed or not available
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
             

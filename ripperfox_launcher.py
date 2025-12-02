@@ -45,12 +45,42 @@ def exit_app(icon, item):
     icon.stop()
     os._exit(0)
 
+
+def check_updates(icon, item):
+    """Check for yt-dlp updates"""
+    try:
+        from ytdlp_updater import check_for_ytdlp_update, download_latest_ytdlp
+        import tkinter as tk
+        from tkinter import messagebox
+        import threading
+        
+        def check_and_update():
+            needs_update, latest_version, _ = check_for_ytdlp_update()
+            if needs_update:
+                root = tk.Tk()
+                root.withdraw()
+                result = messagebox.askyesno(
+                    "Update Available",
+                    f"A new yt-dlp version ({latest_version}) is available.\nUpdate now?"
+                )
+                if result:
+                    if download_latest_ytdlp():
+                        messagebox.showinfo("Success", "yt-dlp updated successfully!")
+                    else:
+                        messagebox.showerror("Error", "Failed to update yt-dlp")
+                root.destroy()
+        
+        threading.Thread(target=check_and_update, daemon=True).start()
+    except Exception as e:
+        print(f"[UPDATE] Error checking updates: {e}")
+
 def setup_tray_icon():
     image = create_tray_icon()
     
     menu = pystray.Menu(
         pystray.MenuItem('Show Console', show_window),
         pystray.MenuItem('Hide Console', hide_window),
+        pystray.MenuItem('Check for yt-dlp Update', check_updates),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem('Exit', exit_app)
     )
@@ -76,6 +106,12 @@ def start_backend():
         from yt_backend import app
         print("[SYSTEM] Starting Flask backend on port 5100...")
         threading.Thread(target=lambda: app.run(port=5100, debug=False, use_reloader=False), daemon=True).start()
+        # If ytdlp_updater supports auto_update_check, start it in background
+        try:
+            from ytdlp_updater import auto_update_check
+            threading.Thread(target=auto_update_check, daemon=True).start()
+        except Exception:
+            pass
     except Exception as e:
         print(f"[ERROR] Failed to start backend: {e}")
 
@@ -94,3 +130,32 @@ if __name__ == "__main__":
     
     print("[SYSTEM] RipperFox is running in system tray. Right-click the icon for options.")
     icon.run()
+
+
+def check_updates(icon, item):
+    """Check for yt-dlp updates"""
+    try:
+        from ytdlp_updater import check_for_ytdlp_update, download_latest_ytdlp
+        import tkinter as tk
+        from tkinter import messagebox
+        import threading
+        
+        def check_and_update():
+            needs_update, latest_version, _ = check_for_ytdlp_update()
+            if needs_update:
+                root = tk.Tk()
+                root.withdraw()
+                result = messagebox.askyesno(
+                    "Update Available",
+                    f"A new yt-dlp version ({latest_version}) is available.\nUpdate now?"
+                )
+                if result:
+                    if download_latest_ytdlp():
+                        messagebox.showinfo("Success", "yt-dlp updated successfully!")
+                    else:
+                        messagebox.showerror("Error", "Failed to update yt-dlp")
+                root.destroy()
+        
+        threading.Thread(target=check_and_update, daemon=True).start()
+    except Exception as e:
+        print(f"[UPDATE] Error checking updates: {e}")

@@ -6,3 +6,5 @@ python-ffmpeg
 pystray
 Pillow
 appdirs
+requests
+packaging

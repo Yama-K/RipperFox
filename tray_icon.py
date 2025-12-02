@@ -59,6 +59,7 @@ def setup_tray_icon():
     menu = pystray.Menu(
         pystray.MenuItem('Show Console', show_window),
         pystray.MenuItem('Hide Console', hide_window),
+        pystray.MenuItem('Check for yt-dlp Update', lambda icon, item: None),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem('Exit', exit_app)
     )

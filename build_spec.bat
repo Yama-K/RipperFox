@@ -8,7 +8,7 @@ echo ========================================
 echo.
 
 echo [*] Installing required packages...
-pip install pyinstaller pillow pystray appdirs
+pip install pyinstaller pillow pystray appdirs requests packaging
 
 echo [*] Building using spec file...
 pyinstaller ripperfox.spec
