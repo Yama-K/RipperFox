@@ -1,6 +1,8 @@
 import sys
 import os
 import threading
+import json
+import appdirs
 from PIL import Image, ImageDraw
 import pystray
 
@@ -9,8 +11,8 @@ def create_tray_icon():
     
     # For PyInstaller, we need to handle the bundled resources
     if getattr(sys, 'frozen', False):
-        # Running as compiled exe
-        base_dir = sys._MEIPASS
+        # Running as compiled exe - use the MEIPASS location if available
+        base_dir = getattr(sys, '_MEIPASS', os.path.dirname(__file__))
     
     icon_path = os.path.join(base_dir, "icon.ico")
     
@@ -50,29 +52,49 @@ def check_updates(icon, item):
     """Check for yt-dlp updates"""
     try:
         from ytdlp_updater import check_for_ytdlp_update, download_latest_ytdlp
+    except Exception as e:
+        print(f"[UPDATE] ytdlp_updater not available: {e}")
+        return
+
+    # Try to use a GUI dialog where available
+    try:
         import tkinter as tk
         from tkinter import messagebox
         import threading
-        
+
         def check_and_update():
+            try:
+                needs_update, latest_version, _ = check_for_ytdlp_update()
+                if needs_update:
+                    root = tk.Tk()
+                    root.withdraw()
+                    result = messagebox.askyesno(
+                        "Update Available",
+                        f"A new yt-dlp version ({latest_version}) is available.\nUpdate now?"
+                    )
+                    if result:
+                        if download_latest_ytdlp():
+                            messagebox.showinfo("Success", "yt-dlp updated successfully!")
+                        else:
+                            messagebox.showerror("Error", "Failed to update yt-dlp")
+                    root.destroy()
+            except Exception as ee:
+                print(f"[UPDATE] Error in GUI update flow: {ee}")
+
+        threading.Thread(target=check_and_update, daemon=True).start()
+    except Exception:
+        # Fallback to console-only behavior if tkinter isn't available
+        try:
             needs_update, latest_version, _ = check_for_ytdlp_update()
             if needs_update:
-                root = tk.Tk()
-                root.withdraw()
-                result = messagebox.askyesno(
-                    "Update Available",
-                    f"A new yt-dlp version ({latest_version}) is available.\nUpdate now?"
-                )
-                if result:
-                    if download_latest_ytdlp():
-                        messagebox.showinfo("Success", "yt-dlp updated successfully!")
-                    else:
-                        messagebox.showerror("Error", "Failed to update yt-dlp")
-                root.destroy()
-        
-        threading.Thread(target=check_and_update, daemon=True).start()
-    except Exception as e:
-        print(f"[UPDATE] Error checking updates: {e}")
+                print(f"[UPDATE] New yt-dlp version available: {latest_version}")
+                # Try to download it automatically
+                if download_latest_ytdlp():
+                    print("[UPDATE] yt-dlp updated successfully (console mode)")
+                else:
+                    print("[UPDATE] Failed to update yt-dlp in console mode")
+        except Exception as ee:
+            print(f"[UPDATE] Error during console update check: {ee}")
 
 def setup_tray_icon():
     image = create_tray_icon()
@@ -80,6 +102,7 @@ def setup_tray_icon():
     menu = pystray.Menu(
         pystray.MenuItem('Show Console', show_window),
         pystray.MenuItem('Hide Console', hide_window),
+        pystray.MenuItem('Autostart', toggle_autostart, checked=lambda item: is_autostart_enabled()),
         pystray.MenuItem('Check for yt-dlp Update', check_updates),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem('Exit', exit_app)
@@ -94,7 +117,7 @@ def start_backend():
         # Add the local site-packages to path (for PyInstaller)
         if getattr(sys, 'frozen', False):
             # Running as compiled exe
-            base_dir = sys._MEIPASS
+            base_dir = getattr(sys, '_MEIPASS', os.path.dirname(__file__))
         else:
             # Running as script
             base_dir = os.path.dirname(__file__)
@@ -115,6 +138,124 @@ def start_backend():
     except Exception as e:
         print(f"[ERROR] Failed to start backend: {e}")
 
+
+def get_appdata_dir():
+    """Return the application data directory for RipperFox.
+    When running as an executable, use appdirs.user_data_dir to match the backend.
+    Otherwise return the project directory.
+    """
+    if getattr(sys, 'frozen', False):
+        data_dir = appdirs.user_data_dir("RipperFox", "RipperFox")
+    else:
+        data_dir = os.path.dirname(os.path.abspath(__file__))
+    os.makedirs(data_dir, exist_ok=True)
+    return data_dir
+
+
+def get_settings_path():
+    return os.path.join(get_appdata_dir(), "settings.json")
+
+
+def load_settings():
+    path = get_settings_path()
+    default = {"autostart": False}
+    try:
+        if os.path.exists(path):
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                default.update(data)
+        else:
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(default, f, indent=2)
+    except Exception as e:
+        print(f"[WARNING] Failed to read settings.json: {e}")
+    return default
+
+
+def save_settings(data):
+    path = get_settings_path()
+    try:
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"[WARNING] Failed to save settings.json: {e}")
+
+
+def startup_entry_path():
+    """Create and return the path for the startup batch file in the user's Startup folder."""
+    startup_folder = os.path.join(os.environ.get('APPDATA', ''), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
+    os.makedirs(startup_folder, exist_ok=True)
+    entry_name = "RipperFox Startup.cmd"
+    return os.path.join(startup_folder, entry_name)
+
+
+def is_autostart_enabled():
+    settings = load_settings()
+    # Also check for presence of the startup file
+    entry = startup_entry_path()
+    if settings.get("autostart", False) and os.path.exists(entry):
+        return True
+    return False
+
+
+def set_autostart(enabled: bool):
+    settings = load_settings()
+    settings["autostart"] = bool(enabled)
+    save_settings(settings)
+    return settings
+
+
+def create_startup_entry():
+    entry = startup_entry_path()
+    # Build the command to execute at startup
+    if getattr(sys, 'frozen', False):
+        exe_cmd = f'"{sys.executable}"'
+    else:
+        # When running as script, call the Python interpreter with the script
+        exe_cmd = f'"{sys.executable}" "{os.path.abspath(__file__)}"'
+    try:
+        with open(entry, 'w', encoding='utf-8') as f:
+            f.write(f'@echo off\r\nstart "" {exe_cmd}\r\nexit\r\n')
+        # Persist autostart setting for consistency
+        set_autostart(True)
+        return True
+    except Exception as e:
+        print(f"[ERROR] Failed to create startup entry: {e}")
+        return False
+
+
+def remove_startup_entry():
+    entry = startup_entry_path()
+    try:
+        if os.path.exists(entry):
+            os.remove(entry)
+        # Persist autostart setting for consistency
+        set_autostart(False)
+        return True
+    except Exception as e:
+        print(f"[ERROR] Failed to remove startup entry: {e}")
+        return False
+
+
+def toggle_autostart(icon, item):
+    current = is_autostart_enabled()
+    if current:
+        if remove_startup_entry():
+            set_autostart(False)
+            print("[SYSTEM] Autostart disabled")
+            try:
+                icon.update_menu()
+            except Exception:
+                pass
+    else:
+        if create_startup_entry():
+            set_autostart(True)
+            print("[SYSTEM] Autostart enabled")
+            try:
+                icon.update_menu()
+            except Exception:
+                pass
+
 if __name__ == "__main__":
     # Start the backend
     start_backend()
@@ -130,32 +271,3 @@ if __name__ == "__main__":
     
     print("[SYSTEM] RipperFox is running in system tray. Right-click the icon for options.")
     icon.run()
-
-
-def check_updates(icon, item):
-    """Check for yt-dlp updates"""
-    try:
-        from ytdlp_updater import check_for_ytdlp_update, download_latest_ytdlp
-        import tkinter as tk
-        from tkinter import messagebox
-        import threading
-        
-        def check_and_update():
-            needs_update, latest_version, _ = check_for_ytdlp_update()
-            if needs_update:
-                root = tk.Tk()
-                root.withdraw()
-                result = messagebox.askyesno(
-                    "Update Available",
-                    f"A new yt-dlp version ({latest_version}) is available.\nUpdate now?"
-                )
-                if result:
-                    if download_latest_ytdlp():
-                        messagebox.showinfo("Success", "yt-dlp updated successfully!")
-                    else:
-                        messagebox.showerror("Error", "Failed to update yt-dlp")
-                root.destroy()
-        
-        threading.Thread(target=check_and_update, daemon=True).start()
-    except Exception as e:
-        print(f"[UPDATE] Error checking updates: {e}")
