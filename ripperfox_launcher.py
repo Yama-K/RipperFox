@@ -48,53 +48,52 @@ def exit_app(icon, item):
     os._exit(0)
 
 
-def check_updates(icon, item):
-    """Check for yt-dlp updates"""
+def update_yt_dlp(icon, item):
+    """Request the backend to update yt-dlp and poll for status"""
     try:
-        from ytdlp_updater import check_for_ytdlp_update, download_latest_ytdlp
+        import requests
     except Exception as e:
-        print(f"[UPDATE] ytdlp_updater not available: {e}")
+        print(f"[UPDATE] Requests not available: {e}. Falling back to local updater.")
+        try:
+            from ytdlp_updater import download_latest_ytdlp
+            if download_latest_ytdlp():
+                print("[UPDATE] yt-dlp updated successfully (local)")
+            else:
+                print("[UPDATE] Local update failed")
+        except Exception as ee:
+            print(f"[UPDATE] Local update failed: {ee}")
         return
 
-    # Try to use a GUI dialog where available
-    try:
-        import tkinter as tk
-        from tkinter import messagebox
-        import threading
-
-        def check_and_update():
-            try:
-                needs_update, latest_version, _ = check_for_ytdlp_update()
-                if needs_update:
-                    root = tk.Tk()
-                    root.withdraw()
-                    result = messagebox.askyesno(
-                        "Update Available",
-                        f"A new yt-dlp version ({latest_version}) is available.\nUpdate now?"
-                    )
-                    if result:
-                        if download_latest_ytdlp():
-                            messagebox.showinfo("Success", "yt-dlp updated successfully!")
-                        else:
-                            messagebox.showerror("Error", "Failed to update yt-dlp")
-                    root.destroy()
-            except Exception as ee:
-                print(f"[UPDATE] Error in GUI update flow: {ee}")
-
-        threading.Thread(target=check_and_update, daemon=True).start()
-    except Exception:
-        # Fallback to console-only behavior if tkinter isn't available
+    def _worker():
         try:
-            needs_update, latest_version, _ = check_for_ytdlp_update()
-            if needs_update:
-                print(f"[UPDATE] New yt-dlp version available: {latest_version}")
-                # Try to download it automatically
+            resp = requests.post("http://127.0.0.1:5100/api/update-yt-dlp", timeout=5)
+            if resp.ok:
+                print("[UPDATE] Update requested")
+                # Poll status
+                import time
+                while True:
+                    time.sleep(1)
+                    s = requests.get("http://127.0.0.1:5100/api/update-status", timeout=5).json()
+                    status = s.get("status")
+                    msg = s.get("message")
+                    print(f"[UPDATE] {status}: {msg}")
+                    if status in ("succeeded", "failed", "idle"):
+                        break
+            else:
+                print(f"[UPDATE] Update request failed: {resp.status_code} {resp.text}")
+        except Exception as e:
+            print(f"[UPDATE] Could not contact backend: {e}. Falling back to local updater.")
+            try:
+                from ytdlp_updater import download_latest_ytdlp
                 if download_latest_ytdlp():
-                    print("[UPDATE] yt-dlp updated successfully (console mode)")
+                    print("[UPDATE] yt-dlp updated successfully (local)")
                 else:
-                    print("[UPDATE] Failed to update yt-dlp in console mode")
-        except Exception as ee:
-            print(f"[UPDATE] Error during console update check: {ee}")
+                    print("[UPDATE] Local update failed")
+            except Exception as ee:
+                print(f"[UPDATE] Local update failed: {ee}")
+
+    import threading
+    threading.Thread(target=_worker, daemon=True).start()
 
 def setup_tray_icon():
     image = create_tray_icon()
@@ -103,7 +102,7 @@ def setup_tray_icon():
         pystray.MenuItem('Show Console', show_window),
         pystray.MenuItem('Hide Console', hide_window),
         pystray.MenuItem('Autostart', toggle_autostart, checked=lambda item: is_autostart_enabled()),
-        pystray.MenuItem('Check for yt-dlp Update', check_updates),
+        pystray.MenuItem('Update yt-dlp', update_yt_dlp),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem('Exit', exit_app)
     )
@@ -125,6 +124,14 @@ def start_backend():
         local_site = os.path.join(base_dir, "python", "Lib", "site-packages")
         if os.path.isdir(local_site) and local_site not in sys.path:
             sys.path.insert(0, local_site)
+
+        # Ensure working directory is the appdata dir so any relative paths resolve to a writable location
+        data_dir = get_appdata_dir()
+        try:
+            os.chdir(data_dir)
+            print(f"[SYSTEM] Changed working dir to: {data_dir}")
+        except Exception as e:
+            print(f"[WARNING] Could not change working directory to {data_dir}: {e}")
         
         from yt_backend import app
         print("[SYSTEM] Starting Flask backend on port 5100...")
@@ -182,10 +189,10 @@ def save_settings(data):
 
 
 def startup_entry_path():
-    """Create and return the path for the startup batch file in the user's Startup folder."""
+    """Return the path for the startup VBS file in the user's Startup folder."""
     startup_folder = os.path.join(os.environ.get('APPDATA', ''), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
     os.makedirs(startup_folder, exist_ok=True)
-    entry_name = "RipperFox Startup.cmd"
+    entry_name = "RipperFox Startup.vbs"
     return os.path.join(startup_folder, entry_name)
 
 
@@ -207,15 +214,31 @@ def set_autostart(enabled: bool):
 
 def create_startup_entry():
     entry = startup_entry_path()
-    # Build the command to execute at startup
+    # Build the command to execute at startup (VBS that runs hidden)
     if getattr(sys, 'frozen', False):
-        exe_cmd = f'"{sys.executable}"'
+        target = f'{sys.executable}'
     else:
         # When running as script, call the Python interpreter with the script
-        exe_cmd = f'"{sys.executable}" "{os.path.abspath(__file__)}"'
+        target = f'{sys.executable} "{os.path.abspath(__file__)}"'
+
+    # Escape internal quotes for VB string literal
+    safe_target = target.replace('"', '""')
+    vbs_content = (
+        'Set WshShell = CreateObject("WScript.Shell")\n'
+        f'WshShell.Run "{safe_target}", 0, False\n'
+    )
+
     try:
+        # Remove any old .cmd entry if present (cleanup)
+        cmd_entry = os.path.join(os.path.dirname(entry), "RipperFox Startup.cmd")
+        if os.path.exists(cmd_entry):
+            try:
+                os.remove(cmd_entry)
+            except Exception:
+                pass
+
         with open(entry, 'w', encoding='utf-8') as f:
-            f.write(f'@echo off\r\nstart "" {exe_cmd}\r\nexit\r\n')
+            f.write(vbs_content)
         # Persist autostart setting for consistency
         set_autostart(True)
         return True
@@ -227,8 +250,16 @@ def create_startup_entry():
 def remove_startup_entry():
     entry = startup_entry_path()
     try:
+        # Remove VBS entry if present
         if os.path.exists(entry):
             os.remove(entry)
+        # Also try removing legacy .cmd entry
+        cmd_entry = os.path.join(os.path.dirname(entry), "RipperFox Startup.cmd")
+        if os.path.exists(cmd_entry):
+            try:
+                os.remove(cmd_entry)
+            except Exception:
+                pass
         # Persist autostart setting for consistency
         set_autostart(False)
         return True
@@ -257,17 +288,17 @@ def toggle_autostart(icon, item):
                 pass
 
 if __name__ == "__main__":
+    # Hide console window as early as possible to avoid visible popup on autostart
+    import ctypes
+    console_window = ctypes.windll.kernel32.GetConsoleWindow()
+    if console_window:
+        ctypes.windll.user32.ShowWindow(console_window, 0)
+
     # Start the backend
     start_backend()
     
     # Setup and run tray icon
     icon = setup_tray_icon()
-    
-    # Hide console window initially
-    import ctypes
-    console_window = ctypes.windll.kernel32.GetConsoleWindow()
-    if console_window:
-        ctypes.windll.user32.ShowWindow(console_window, 0)
     
     print("[SYSTEM] RipperFox is running in system tray. Right-click the icon for options.")
     icon.run()

@@ -112,26 +112,53 @@ def log(tag, message, color=Fore.WHITE):
 
 # --- Save settings helper ---
 def save_settings(data):
+    # Convert absolute paths back to relative (when under BASE_DIR) before persisting
+    to_save = dict(data)
     try:
+        dd = to_save.get("default_dir")
+        if isinstance(dd, str) and os.path.isabs(dd):
+            try:
+                if os.path.commonpath([os.path.abspath(dd), os.path.abspath(BASE_DIR)]) == os.path.abspath(BASE_DIR):
+                    to_save["default_dir"] = os.path.relpath(dd, BASE_DIR)
+            except Exception:
+                pass
+
+        # Normalize download_dirs entries
+        download_dirs = to_save.get("download_dirs", {})
+        for k, cfg in list(download_dirs.items()):
+            dir_val = cfg.get("dir")
+            if isinstance(dir_val, str) and os.path.isabs(dir_val):
+                try:
+                    if os.path.commonpath([os.path.abspath(dir_val), os.path.abspath(BASE_DIR)]) == os.path.abspath(BASE_DIR):
+                        cfg["dir"] = os.path.relpath(dir_val, BASE_DIR)
+                except Exception:
+                    pass
+        to_save["download_dirs"] = download_dirs
+
         with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+            json.dump(to_save, f, indent=2)
     except Exception as e:
         log("settings", f"Failed to save settings.json: {e}", Fore.RED)
 
 # --- Settings loader - simplified without yt_dlp_path ---
 def load_settings():
+    # Keep stored/default values relative-friendly and resolve them only for runtime
     base = {
-        "default_dir": os.path.join(BASE_DIR, "downloads"),
+        "default_dir": "downloads",
         "default_args": "--recode-video mp4 --embed-thumbnail --embed-metadata",
         "download_dirs": {},
         "show_toasts": True
     }
 
-    # If no file exists, create a new one
+    # If no file exists, create a new one (persisting the relative defaults)
     if not os.path.exists(SETTINGS_FILE):
         log("settings", "No settings.json found. Creating default.", Fore.YELLOW)
         save_settings(base)
-        return base
+        # Build and return a runtime-resolved copy
+        runtime = dict(base)
+        runtime["default_dir"] = os.path.abspath(os.path.join(BASE_DIR, base["default_dir"]))
+        runtime["download_dirs"] = {}
+        return runtime
 
     # If file exists, try to load or recover
     try:
@@ -143,12 +170,83 @@ def load_settings():
             # Remove yt_dlp_path if it exists in old settings (migration from old version)
             if 'yt_dlp_path' in data:
                 del data['yt_dlp_path']
+
+            # Convert stored absolute paths back to relative when they point inside BASE_DIR
+            changed = False
+            dd = data.get('default_dir')
+            if isinstance(dd, str) and os.path.isabs(dd):
+                try:
+                    if os.path.commonpath([os.path.abspath(dd), os.path.abspath(BASE_DIR)]) == os.path.abspath(BASE_DIR):
+                        data['default_dir'] = os.path.relpath(dd, BASE_DIR)
+                        changed = True
+                except Exception:
+                    pass
+
+            ddirs = data.get('download_dirs', {})
+            for k, cfg in list(ddirs.items()):
+                dir_val = cfg.get('dir')
+                if isinstance(dir_val, str) and os.path.isabs(dir_val):
+                    try:
+                        if os.path.commonpath([os.path.abspath(dir_val), os.path.abspath(BASE_DIR)]) == os.path.abspath(BASE_DIR):
+                            cfg['dir'] = os.path.relpath(dir_val, BASE_DIR)
+                            changed = True
+                    except Exception:
+                        pass
+            data['download_dirs'] = ddirs
+
             base.update(data)
+
+            # If we converted any absolute in-file paths to relative, persist that change to avoid committing system-local paths
+            if changed:
+                try:
+                    save_settings(base)
+                    log('settings', 'Normalized stored paths to relative locations', Fore.YELLOW)
+                except Exception:
+                    pass
     except Exception as e:
         log("settings", f"Failed to load settings.json ({e}). Regenerating default.", Fore.RED)
         save_settings(base)
 
-    os.makedirs(base["default_dir"], exist_ok=True)
+    # ----- Build runtime-resolved copy (do not persist these changes) -----
+    runtime = dict(base)
+
+    # Resolve default_dir to absolute (if it's relative)
+    if not os.path.isabs(runtime.get("default_dir", "")):
+        runtime["default_dir"] = os.path.abspath(os.path.join(BASE_DIR, runtime.get("default_dir", "")))
+
+    # Normalize per-site download dirs for runtime
+    resolved_download_dirs = {}
+    for key, cfg in runtime.get("download_dirs", {}).items():
+        cfg_copy = dict(cfg)
+        dir_val = cfg_copy.get("dir")
+        if dir_val and not os.path.isabs(dir_val):
+            cfg_copy["dir"] = os.path.abspath(os.path.join(BASE_DIR, dir_val))
+        resolved_download_dirs[key] = cfg_copy
+    runtime["download_dirs"] = resolved_download_dirs
+
+    # Ensure default dir exists, with fallbacks if creation fails
+    def _ensure_dir(path):
+        try:
+            os.makedirs(path, exist_ok=True)
+            return True
+        except Exception as e:
+            log("settings", f"Failed to create directory '{path}': {e}", Fore.RED)
+            return False
+
+    preferred = runtime["default_dir"]
+    if not _ensure_dir(preferred):
+        fallback1 = os.path.abspath(os.path.join(BASE_DIR, "downloads"))
+        if _ensure_dir(fallback1):
+            runtime["default_dir"] = fallback1
+        else:
+            # Try user's Downloads folder then temp dir as last resort
+            user_dl = os.path.join(os.path.expanduser("~"), "Downloads")
+            if _ensure_dir(user_dl):
+                runtime["default_dir"] = user_dl
+            else:
+                import tempfile
+                runtime["default_dir"] = tempfile.gettempdir()
+                _ensure_dir(runtime["default_dir"])
 
     print("=" * 32)
     log("startup", f"Python runtime: {LOCAL_PYTHON_DIR}", Fore.CYAN)
@@ -204,6 +302,41 @@ def settings():
         save_settings(SETTINGS)
         log("settings", "Updated and saved settings.json", Fore.YELLOW)
     return jsonify(SETTINGS)
+
+# --- YT-DLP UPDATE ROUTES ---
+# Tracks the last update attempt and its status
+UPDATE_JOB = {"status": "idle", "message": "Idle", "started_at": None, "finished_at": None, "latest_version": None}
+
+@app.route("/api/update-yt-dlp", methods=["POST"])
+def update_yt_dlp_api():
+    global UPDATE_JOB
+    if not YTDLP_UPDATER_AVAILABLE:
+        return jsonify({"error": "ytdlp_updater not available"}), 503
+
+    def _do_update():
+        from ytdlp_updater import download_latest_ytdlp, ensure_ytdlp_binary
+        try:
+            UPDATE_JOB.update({"status": "running", "message": "Starting update...", "started_at": time.time(), "finished_at": None})
+            log("yt-dlp", "Starting yt-dlp update...", Fore.CYAN)
+            ok = download_latest_ytdlp()
+            if ok:
+                path, version = ensure_ytdlp_binary()
+                UPDATE_JOB.update({"status": "succeeded", "message": f"Updated to {version}", "finished_at": time.time(), "latest_version": version})
+                log("yt-dlp", f"Updated yt-dlp to {version}", Fore.GREEN)
+            else:
+                UPDATE_JOB.update({"status": "failed", "message": "Download failed", "finished_at": time.time()})
+                log("yt-dlp", "yt-dlp download failed", Fore.RED)
+        except Exception as e:
+            UPDATE_JOB.update({"status": "failed", "message": str(e), "finished_at": time.time()})
+            log("yt-dlp", f"Update failed: {e}", Fore.RED)
+
+    threading.Thread(target=_do_update, daemon=True).start()
+    return jsonify({"status": "started"})
+
+@app.route("/api/update-status", methods=["GET"])
+def update_status():
+    # Return current update job info
+    return jsonify(UPDATE_JOB)
 
 # --- Enhanced download function with better yt-dlp options ---
 @app.route("/api/download", methods=["POST"])

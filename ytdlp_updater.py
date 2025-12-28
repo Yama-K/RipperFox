@@ -30,7 +30,18 @@ def check_for_ytdlp_update(current_version=None):
             "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest",
             timeout=10
         )
-        latest_release = response.json()
+        # Treat non-200 responses as 'no update' instead of raising
+        if response.status_code != 200:
+            print(f"[yt-dlp] Update check skipped (status {response.status_code})")
+            return False, None, []
+
+        try:
+            latest_release = response.json()
+        except ValueError as e:
+            # JSON decode errors (e.g., HTML error page or empty body) are benign for auto-check
+            print(f"[yt-dlp] Update check skipped (invalid response): {e}")
+            return False, None, []
+
         latest_version = latest_release.get("tag_name", "").lstrip("v")
         
         # If we have a current version to compare
@@ -41,7 +52,8 @@ def check_for_ytdlp_update(current_version=None):
         
         return False, latest_version, latest_release.get("assets", [])
     except Exception as e:
-        print(f"[yt-dlp] Update check failed: {e}")
+        # Network or other errors should not alarm the user; log and continue
+        print(f"[yt-dlp] Update check skipped: {e}")
         return False, None, []
 
 def download_latest_ytdlp():
@@ -152,7 +164,8 @@ def auto_update_check():
                 # download_latest_ytdlp()
         
         except Exception as e:
-            print(f"[yt-dlp] Auto-update check failed: {e}")
+            # Non-fatal errors are normal (rate limits, network issues); log at info level
+            print(f"[yt-dlp] Auto-update check skipped: {e}")
         
         # Check once per day
         time.sleep(24 * 60 * 60)

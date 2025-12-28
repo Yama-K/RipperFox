@@ -53,13 +53,60 @@ def exit_app(icon, item):
     icon.stop()
     os._exit(0)
 
+def update_yt_dlp(icon, item):
+    """Trigger backend update and stream status to console"""
+    try:
+        import requests
+    except Exception as e:
+        print(f"[UPDATE] Requests not available: {e}. Falling back to local updater.")
+        try:
+            from ytdlp_updater import download_latest_ytdlp
+            if download_latest_ytdlp():
+                print("[UPDATE] yt-dlp updated successfully (local)")
+            else:
+                print("[UPDATE] Local update failed")
+        except Exception as ee:
+            print(f"[UPDATE] Local update failed: {ee}")
+        return
+
+    def _worker():
+        try:
+            resp = requests.post("http://127.0.0.1:5100/api/update-yt-dlp", timeout=5)
+            if resp.ok:
+                print("[UPDATE] Update requested")
+                import time
+                while True:
+                    time.sleep(1)
+                    s = requests.get("http://127.0.0.1:5100/api/update-status", timeout=5).json()
+                    status = s.get("status")
+                    msg = s.get("message")
+                    print(f"[UPDATE] {status}: {msg}")
+                    if status in ("succeeded", "failed", "idle"):
+                        break
+            else:
+                print(f"[UPDATE] Update request failed: {resp.status_code} {resp.text}")
+        except Exception as e:
+            print(f"[UPDATE] Could not contact backend: {e}. Falling back to local updater.")
+            try:
+                from ytdlp_updater import download_latest_ytdlp
+                if download_latest_ytdlp():
+                    print("[UPDATE] yt-dlp updated successfully (local)")
+                else:
+                    print("[UPDATE] Local update failed")
+            except Exception as ee:
+                print(f"[UPDATE] Local update failed: {ee}")
+
+    import threading
+    threading.Thread(target=_worker, daemon=True).start()
+
+
 def setup_tray_icon():
     image = create_tray_icon()
     
     menu = pystray.Menu(
         pystray.MenuItem('Show Console', show_window),
         pystray.MenuItem('Hide Console', hide_window),
-        pystray.MenuItem('Check for yt-dlp Update', lambda icon, item: None),
+        pystray.MenuItem('Update yt-dlp', update_yt_dlp),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem('Exit', exit_app)
     )
@@ -70,6 +117,20 @@ def setup_tray_icon():
 def start_backend():
     """Start the Flask backend"""
     try:
+        # Change working directory to appdata when running as frozen so relative paths are writable
+        try:
+            if getattr(sys, 'frozen', False):
+                import appdirs
+                data_dir = appdirs.user_data_dir("RipperFox", "RipperFox")
+                os.makedirs(data_dir, exist_ok=True)
+                try:
+                    os.chdir(data_dir)
+                    print(f"[SYSTEM] Changed working dir to: {data_dir}")
+                except Exception as e:
+                    print(f"[WARNING] Could not change working directory to {data_dir}: {e}")
+        except Exception:
+            pass
+
         from yt_backend import app
         print("[SYSTEM] Starting Flask backend on port 5100...")
         # Run in a separate thread to avoid blocking
@@ -78,17 +139,17 @@ def start_backend():
         print(f"[ERROR] Failed to start backend: {e}")
 
 if __name__ == "__main__":
+    # Hide console window as early as possible
+    import ctypes
+    console_window = ctypes.windll.kernel32.GetConsoleWindow()
+    if console_window:
+        ctypes.windll.user32.ShowWindow(console_window, 0)  # SW_HIDE
+
     # Start the backend first
     start_backend()
     
     # Then start the tray icon
     icon = setup_tray_icon()
-    
-    # Hide console window initially
-    import ctypes
-    console_window = ctypes.windll.kernel32.GetConsoleWindow()
-    if console_window:
-        ctypes.windll.user32.ShowWindow(console_window, 0)  # SW_HIDE
     
     print("[SYSTEM] RipperFox is running in system tray. Right-click the icon for options.")
     icon.run()

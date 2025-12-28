@@ -1,0 +1,6 @@
+{
+  "default_dir": "downloads\\subdir_test",
+  "default_args": "--recode-video mp4 --embed-thumbnail --embed-metadata",
+  "download_dirs": {},
+  "show_toasts": true
+}
