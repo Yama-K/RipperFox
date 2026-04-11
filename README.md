@@ -17,6 +17,13 @@ The extension cannot function without the backend.
 You can get the latest backend release and setup instructions right here in this repository.
 
 ---
+Screenshots
+
+<img width="363" height="526" alt="image" src="https://github.com/user-attachments/assets/2024400c-2af5-42d2-b052-77272cad3ff6" />
+<img width="363" height="526" alt="image" src="https://github.com/user-attachments/assets/fa4643f0-b744-4be2-9d76-c8f95810f327" />
+<img width="363" height="124" alt="image" src="https://github.com/user-attachments/assets/202b048a-497d-4ecb-95fa-43f8c1fe46e5" />
+
+---
 
 ## ✨ Features
 
