@@ -100,12 +100,54 @@ def update_yt_dlp(icon, item):
     threading.Thread(target=_worker, daemon=True).start()
 
 
+def check_for_updates(icon, item):
+    """Check for RipperFox updates"""
+    try:
+        import requests
+    except Exception as e:
+        print(f"[UPDATE] Requests not available: {e}")
+        return
+
+    def _worker():
+        try:
+            # Check for yt-dlp updates
+            resp = requests.post("http://127.0.0.1:5100/api/update-yt-dlp", timeout=5)
+            if resp.ok:
+                print("[UPDATE] yt-dlp update check initiated")
+            else:
+                print(f"[UPDATE] yt-dlp update check failed: {resp.status_code}")
+
+            # Check for RipperFox updates
+            resp = requests.get("http://127.0.0.1:5100/api/check-ripperfox-update", timeout=5)
+            if resp.ok:
+                data = resp.json()
+                if data.get("update_available"):
+                    print(f"[UPDATE] RipperFox update available: {data.get('latest_version')} (current: {data.get('current_version')})")
+                    print("[UPDATE] Starting automatic update...")
+                    # Start the update
+                    update_resp = requests.post("http://127.0.0.1:5100/api/update-ripperfox", timeout=5)
+                    if update_resp.ok:
+                        print("[UPDATE] RipperFox update initiated")
+                    else:
+                        print(f"[UPDATE] Failed to initiate RipperFox update: {update_resp.status_code}")
+                else:
+                    print(f"[UPDATE] RipperFox is up to date (version {data.get('current_version')})")
+            else:
+                print(f"[UPDATE] RipperFox update check failed: {resp.status_code}")
+        except Exception as e:
+            print(f"[UPDATE] Could not contact backend: {e}")
+
+    import threading
+    threading.Thread(target=_worker, daemon=True).start()
+
+
 def setup_tray_icon():
     image = create_tray_icon()
     
     menu = pystray.Menu(
         pystray.MenuItem('Show Console', show_window),
         pystray.MenuItem('Hide Console', hide_window),
+        pystray.MenuItem('Check for Updates', check_for_updates),
         pystray.MenuItem('Update yt-dlp', update_yt_dlp),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem('Exit', exit_app)

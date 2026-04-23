@@ -43,7 +43,7 @@ if os.path.isdir(local_site) and local_site not in sys.path:
     sys.path.insert(0, local_site)
 # ----------------------------------------------------------
 
-import subprocess, threading, json, time, urllib.parse, shutil
+import subprocess, threading, json, time, urllib.parse, shutil, requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from fnmatch import fnmatch
@@ -305,7 +305,10 @@ def settings():
 
 # --- YT-DLP UPDATE ROUTES ---
 # Tracks the last update attempt and its status
+RIPPERFOX_VERSION = "2.1.0"
+RIPPERFOX_REPO = "Yama-K/RipperFox"
 UPDATE_JOB = {"status": "idle", "message": "Idle", "started_at": None, "finished_at": None, "latest_version": None}
+RIPPERFOX_UPDATE_JOB = {"status": "idle", "message": "Idle", "started_at": None, "finished_at": None, "latest_version": None}
 
 @app.route("/api/update-yt-dlp", methods=["POST"])
 def update_yt_dlp_api():
@@ -338,6 +341,162 @@ def update_status():
     # Return current update job info
     return jsonify(UPDATE_JOB)
 
+def check_for_ripperfox_update():
+    """Check if a newer RipperFox version is available"""
+    try:
+        response = requests.get(
+            f"https://api.github.com/repos/{RIPPERFOX_REPO}/releases/latest",
+            timeout=10
+        )
+        if response.status_code != 200:
+            print(f"[RipperFox] Update check skipped (status {response.status_code})")
+            return False, None
+
+        try:
+            latest_release = response.json()
+        except ValueError as e:
+            print(f"[RipperFox] Update check skipped (invalid response): {e}")
+            return False, None
+
+        latest_version = latest_release.get("tag_name", "").lstrip("v")
+        
+        if latest_version:
+            from packaging import version
+            if version.parse(latest_version) > version.parse(RIPPERFOX_VERSION):
+                return True, latest_version
+        
+        return False, latest_version
+    except Exception as e:
+        print(f"[RipperFox] Update check skipped: {e}")
+        return False, None
+
+@app.route("/api/check-ripperfox-update", methods=["GET"])
+def check_ripperfox_update_api():
+    """Check for RipperFox updates"""
+    try:
+        update_available, latest_version = check_for_ripperfox_update()
+        return jsonify({
+            "current_version": RIPPERFOX_VERSION,
+            "latest_version": latest_version,
+            "update_available": update_available
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/update-ripperfox", methods=["POST"])
+def update_ripperfox_api():
+    """Update RipperFox to the latest version"""
+    global RIPPERFOX_UPDATE_JOB
+    try:
+        update_available, latest_version = check_for_ripperfox_update()
+        if not update_available:
+            return jsonify({"error": "No update available"}), 400
+
+        def _do_update():
+            try:
+                RIPPERFOX_UPDATE_JOB.update({"status": "running", "message": "Starting RipperFox update...", "started_at": time.time(), "finished_at": None})
+                log("RipperFox", "Starting RipperFox update...", Fore.CYAN)
+                
+                # Get the latest release info
+                response = requests.get(f"https://api.github.com/repos/{RIPPERFOX_REPO}/releases/latest", timeout=10)
+                latest_release = response.json()
+                
+                # Find the source code download URL
+                download_url = None
+                for asset in latest_release.get("assets", []):
+                    if asset["name"].endswith(".zip"):
+                        download_url = asset["browser_download_url"]
+                        break
+                
+                if not download_url:
+                    RIPPERFOX_UPDATE_JOB.update({
+                        "status": "failed", 
+                        "message": "No downloadable release found. Please update manually.", 
+                        "finished_at": time.time(),
+                        "download_url": latest_release.get("html_url")
+                    })
+                    return
+                
+                # Download the update
+                RIPPERFOX_UPDATE_JOB.update({"status": "running", "message": "Downloading update..."})
+                import tempfile, zipfile, shutil
+                
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    zip_path = os.path.join(temp_dir, "update.zip")
+                    
+                    # Download the zip file
+                    with requests.get(download_url, stream=True, timeout=30) as r:
+                        r.raise_for_status()
+                        with open(zip_path, 'wb') as f:
+                            for chunk in r.iter_content(chunk_size=8192):
+                                f.write(chunk)
+                    
+                    # Extract the zip file
+                    extract_dir = os.path.join(temp_dir, "extracted")
+                    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                        zip_ref.extractall(extract_dir)
+                    
+                    # Find the extracted directory (GitHub zips have a top-level directory)
+                    extracted_dirs = [d for d in os.listdir(extract_dir) if os.path.isdir(os.path.join(extract_dir, d))]
+                    if not extracted_dirs:
+                        raise Exception("Invalid zip structure")
+                    
+                    source_dir = os.path.join(extract_dir, extracted_dirs[0])
+                    
+                    # Backup current settings
+                    current_dir = os.path.dirname(__file__)
+                    settings_backup = None
+                    if os.path.exists(SETTINGS_FILE):
+                        settings_backup = os.path.join(temp_dir, "settings_backup.json")
+                        shutil.copy2(SETTINGS_FILE, settings_backup)
+                        log("RipperFox", "Backed up current settings", Fore.YELLOW)
+                    
+                    # Copy new files, excluding certain files
+                    exclude_files = {'.git', '__pycache__', '.venv', 'downloads', 'python', 'settings.json'}
+                    
+                    RIPPERFOX_UPDATE_JOB.update({"status": "running", "message": "Installing update..."})
+                    
+                    for root, dirs, files in os.walk(source_dir):
+                        # Remove excluded directories
+                        dirs[:] = [d for d in dirs if d not in exclude_files]
+                        
+                        rel_path = os.path.relpath(root, source_dir)
+                        dest_path = os.path.join(current_dir, rel_path) if rel_path != '.' else current_dir
+                        
+                        for file in files:
+                            if file not in exclude_files:
+                                src_file = os.path.join(root, file)
+                                dest_file = os.path.join(dest_path, file)
+                                os.makedirs(os.path.dirname(dest_file), exist_ok=True)
+                                shutil.copy2(src_file, dest_file)
+                    
+                    # Restore settings if backup exists
+                    if settings_backup and os.path.exists(settings_backup):
+                        shutil.copy2(settings_backup, SETTINGS_FILE)
+                        log("RipperFox", "Restored user settings", Fore.GREEN)
+                    
+                    RIPPERFOX_UPDATE_JOB.update({
+                        "status": "succeeded", 
+                        "message": f"Successfully updated to {latest_version}. Please restart RipperFox.", 
+                        "finished_at": time.time(), 
+                        "latest_version": latest_version
+                    })
+                    log("RipperFox", f"Successfully updated to {latest_version}", Fore.GREEN)
+                    
+            except Exception as e:
+                RIPPERFOX_UPDATE_JOB.update({"status": "failed", "message": str(e), "finished_at": time.time()})
+                log("RipperFox", f"Update failed: {e}", Fore.RED)
+
+        threading.Thread(target=_do_update, daemon=True).start()
+        return jsonify({"status": "started"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/ripperfox-update-status", methods=["GET"])
+def ripperfox_update_status():
+    """Return current RipperFox update job info"""
+    return jsonify(RIPPERFOX_UPDATE_JOB)
+
 # --- Enhanced download function with better yt-dlp options ---
 @app.route("/api/download", methods=["POST"])
 def download():
@@ -353,6 +512,9 @@ def download():
     download_dir = (site_settings.get("dir") if site_settings else SETTINGS["default_dir"])
     custom_args = (site_settings.get("args") if site_settings else SETTINGS["default_args"])
     os.makedirs(download_dir, exist_ok=True)
+
+    job_id = str(int(time.time() * 1000))
+    JOBS[job_id] = {"url": url, "site": hostname, "status": "starting", "dir": download_dir}
 
     job_id = str(int(time.time() * 1000))
     JOBS[job_id] = {"url": url, "site": hostname, "status": "starting", "dir": download_dir}
@@ -388,6 +550,10 @@ def download():
                 try:
                     returncode, stdout, stderr = run_ytdlp_with_binary(url, download_dir, custom_args)
                     if returncode == 0:
+                        # Try to find the downloaded file
+                        downloaded_file = find_downloaded_file(download_dir, url)
+                        if downloaded_file:
+                            JOBS[job_id]["file_path"] = downloaded_file
                         JOBS[job_id]["status"] = "completed"
                         log("yt-dlp", f"Job completed using binary: {url}", Fore.CYAN)
                         return
@@ -401,6 +567,11 @@ def download():
             # Fallback to Python package if binary failed or not available
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
+            
+            # Try to find the downloaded file
+            downloaded_file = find_downloaded_file(download_dir, url)
+            if downloaded_file:
+                JOBS[job_id]["file_path"] = downloaded_file
             
             JOBS[job_id]["status"] = "completed"
             log("yt-dlp", f"Job completed: {url}", Fore.CYAN)
@@ -416,6 +587,95 @@ def download():
 
     threading.Thread(target=run_job, daemon=True).start()
     return jsonify({"job_id": job_id})
+
+# --- Helper function to find downloaded file ---
+def find_downloaded_file(download_dir, url):
+    """Find the most recently created file in download_dir that matches common video/image extensions"""
+    try:
+        # Common extensions for downloaded media
+        extensions = ['.mp4', '.webm', '.mkv', '.avi', '.mov', '.flv', '.wmv', '.m4v', 
+                     '.gif', '.jpg', '.jpeg', '.png', '.webp', '.bmp']
+        
+        files = []
+        for file in os.listdir(download_dir):
+            if any(file.lower().endswith(ext) for ext in extensions):
+                file_path = os.path.join(download_dir, file)
+                if os.path.isfile(file_path):
+                    # Get file creation time
+                    stat = os.stat(file_path)
+                    files.append((file_path, stat.st_ctime))
+        
+        if files:
+            # Return the most recently created file
+            files.sort(key=lambda x: x[1], reverse=True)
+            return files[0][0]
+        
+    except Exception as e:
+        log("file_finder", f"Error finding downloaded file: {e}", Fore.YELLOW)
+    
+    return None
+
+# --- File/Directory opening endpoints ---
+@app.route("/api/open-file", methods=["POST"])
+def open_file():
+    try:
+        data = request.get_json()
+        file_path = data.get("file_path")
+        
+        if not file_path:
+            return jsonify({"error": "No file_path provided"}), 400
+        
+        if not os.path.exists(file_path):
+            return jsonify({"error": f"File does not exist: {file_path}"}), 404
+        
+        # Open file with system default application
+        import platform
+        system = platform.system()
+        
+        if system == "Windows":
+            # Use os.startfile for Windows
+            os.startfile(file_path)
+        elif system == "Darwin":  # macOS
+            subprocess.Popen(["open", file_path])
+        else:  # Linux/Unix
+            subprocess.Popen(["xdg-open", file_path])
+        
+        log("file_op", f"Opened file: {file_path}", Fore.GREEN)
+        return jsonify({"success": True})
+        
+    except Exception as e:
+        log("file_op", f"Error opening file: {e}", Fore.RED)
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/show-directory", methods=["POST"])
+def show_directory():
+    try:
+        data = request.get_json()
+        dir_path = data.get("dir_path")
+        
+        if not dir_path:
+            return jsonify({"error": "No dir_path provided"}), 400
+        
+        if not os.path.exists(dir_path):
+            return jsonify({"error": f"Directory does not exist: {dir_path}"}), 404
+        
+        # Open directory in file explorer
+        import platform
+        system = platform.system()
+        
+        if system == "Windows":
+            subprocess.Popen(["explorer.exe", dir_path])
+        elif system == "Darwin":  # macOS
+            subprocess.Popen(["open", dir_path])
+        else:  # Linux/Unix
+            subprocess.Popen(["xdg-open", dir_path])
+        
+        log("file_op", f"Opened directory: {dir_path}", Fore.GREEN)
+        return jsonify({"success": True})
+        
+    except Exception as e:
+        log("file_op", f"Error opening directory: {e}", Fore.RED)
+        return jsonify({"error": str(e)}), 500
 
 # --- STATUS ROUTES ---
 @app.route("/api/status", methods=["GET"])
