@@ -93,6 +93,8 @@ else:
 
 # --- Global variables ---
 JOBS = {}
+JOB_THREADS = {}  # Track threads separately (not JSON serializable)
+JOB_PROCESSES = {}  # Track processes separately (not JSON serializable)
 JOB_HISTORY_LIMIT = 10
 LOCAL_PYTHON_DIR = os.path.join(BASE_DIR, "python")
 # ------------------------------------------------------------------
@@ -516,9 +518,6 @@ def download():
     job_id = str(int(time.time() * 1000))
     JOBS[job_id] = {"url": url, "site": hostname, "status": "starting", "dir": download_dir}
 
-    job_id = str(int(time.time() * 1000))
-    JOBS[job_id] = {"url": url, "site": hostname, "status": "starting", "dir": download_dir}
-
     def run_job():
         JOBS[job_id]["status"] = "running"
         
@@ -557,6 +556,11 @@ def download():
                         JOBS[job_id]["status"] = "completed"
                         log("yt-dlp", f"Job completed using binary: {url}", Fore.CYAN)
                         return
+                    elif returncode == -15 or "terminated" in stderr.lower():
+                        # Process was cancelled
+                        JOBS[job_id]["status"] = "cancelled"
+                        log("yt-dlp", f"Download cancelled: {url}", Fore.YELLOW)
+                        return
                     else:
                         # Fallback to python package
                         JOBS[job_id]["status"] = f"error: {stderr}"
@@ -576,6 +580,9 @@ def download():
             JOBS[job_id]["status"] = "completed"
             log("yt-dlp", f"Job completed: {url}", Fore.CYAN)
             
+        except KeyboardInterrupt:
+            JOBS[job_id]["status"] = "cancelled"
+            log("yt-dlp", f"Download cancelled: {url}", Fore.YELLOW)
         except Exception as e:
             JOBS[job_id]["status"] = f"error: {e}"
             log("error", f"Download failed: {e}", Fore.RED)
@@ -585,8 +592,40 @@ def download():
             for old in list(JOBS.keys())[:-JOB_HISTORY_LIMIT]:
                 del JOBS[old]
 
-    threading.Thread(target=run_job, daemon=True).start()
+    thread = threading.Thread(target=run_job, daemon=True)
+    JOB_THREADS[job_id] = thread
+    thread.start()
     return jsonify({"job_id": job_id})
+
+# --- CANCEL ROUTE ---
+@app.route("/api/cancel/<job_id>", methods=["POST"])
+def cancel_download(job_id):
+    if job_id not in JOBS:
+        return jsonify({"error": f"Job {job_id} not found"}), 404
+    
+    job = JOBS[job_id]
+    status = job.get("status", "").lower()
+    
+    # Only allow cancellation if job is running
+    if "running" not in status and "starting" not in status and "downloading" not in status:
+        return jsonify({"error": f"Cannot cancel job with status: {job.get('status')}"}), 400
+    
+    try:
+        # Mark the job as cancelled
+        JOBS[job_id]["status"] = "cancelled"
+        
+        # If there's an associated thread, we can't directly kill it, but we've marked the job as cancelled
+        # The download process will eventually complete or timeout
+        if job_id in JOB_THREADS:
+            thread = JOB_THREADS[job_id]
+            log("yt-dlp", f"Marked job {job_id} as cancelled (thread: {thread.is_alive()})", Fore.YELLOW)
+        
+        log("yt-dlp", f"Download cancelled by user: {job.get('url')}", Fore.YELLOW)
+        return jsonify({"status": "cancelled", "job_id": job_id})
+    
+    except Exception as e:
+        log("error", f"Error cancelling job {job_id}: {e}", Fore.RED)
+        return jsonify({"error": str(e)}), 500
 
 # --- Helper function to find downloaded file ---
 def find_downloaded_file(download_dir, url):
