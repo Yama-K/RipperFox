@@ -38,7 +38,7 @@ Screenshots
 ### ⚙️ Installation
 
 =======
-### 1. Install the [RipperFox Extension by clicking me](https://github.com/Yama-K/RipperFoxExtension/releases/download/Release/RipperFox-2.1.xpi)
+### 1. Install the [RipperFox Extension by clicking me](https://github.com/Yama-K/RipperFoxExtension/releases/download/Release/ripperfox-signed.xpi))
 
 ### 2. Download the exe: [RipperFox.exe](https://github.com/Yama-K/RipperFox/releases/download/Release/RipperFox.exe)
   and run it, it'll automatically hide it in your system tray. 
